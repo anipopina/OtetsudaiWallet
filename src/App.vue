@@ -2,6 +2,7 @@
 import { computed, ref, watch, nextTick, onUnmounted } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { readKeys, saveKey, forgetKey, type SavedKey } from "./keys";
+import { walletMessage } from "./wallet-language";
 const route = useRoute(),
   router = useRouter();
 const page = computed(() => route.path.slice(1) || "home"),
@@ -28,6 +29,10 @@ const share = ref<{
   token: string;
   name: string;
 } | null>(null);
+const kanjiEnabled=computed(()=>data.value?.wallet?.kanjiEnabled!==false);
+const easy=computed(()=>page.value==="wallet" && (!data.value || !kanjiEnabled.value));
+const words=(normal:string,simple:string)=>easy.value?simple:normal;
+const message=(value:string)=>easy.value?walletMessage(value):value;
 const toast = ref("");
 let toastTimer: ReturnType<typeof setTimeout> | undefined;
 function showToast(message: string) {
@@ -180,6 +185,10 @@ async function refreshWallet() {
     showToast("残高と履歴を更新しました");
   });
 }
+async function toggleKanji(){
+  const enabled=!kanjiEnabled.value;
+  await act(async()=>{const result=await api('wallet/settings',{kanjiEnabled:enabled});data.value.wallet.kanjiEnabled=result.kanjiEnabled;showToast('かんじの設定を保存しました');});
+}
 function forget(token: string) {
   if (!forgetKey(token))
     showToast("ブラウザの保存情報を更新できませんでした。");
@@ -194,14 +203,14 @@ function forget(token: string) {
       ><span
         >おてつだいウォレット<small>Otetsudai Wallet</small></span
       ></RouterLink
-    ><span class="header-note">家族のおてつだいを、うれしい貯金に。</span>
+    ><span class="header-note">{{ words("家族のおてつだいを、うれしい貯金に。","かぞくのおてつだいを、うれしいちょきんに。") }}</span>
   </header>
   <Transition name="toast"
-    ><div v-if="toast" class="toast" role="status">{{ toast }}</div></Transition
+    ><div v-if="toast" class="toast" role="status">{{ message(toast) }}</div></Transition
   >
   <main>
-    <div v-if="error" class="message error" role="alert">{{ error }}</div>
-    <div v-if="notice" class="message" role="status">{{ notice }}</div>
+    <div v-if="error" class="message error" role="alert">{{ message(error) }}</div>
+    <div v-if="notice" class="message" role="status">{{ message(notice) }}</div>
     <template v-if="page === 'home'">
       <section class="hero">
         <span class="eyebrow">家族だけの小さな銀行</span>
@@ -273,7 +282,7 @@ function forget(token: string) {
         </div>
       </div>
     </template>
-    <p v-else-if="loading" class="panel" role="status">読み込み中…</p>
+    <p v-else-if="loading" class="panel" role="status">{{ words("読み込み中…","よみこみちゅう…") }}</p>
     <template v-else-if="data">
       <div class="page-title">
         <div>
@@ -283,7 +292,11 @@ function forget(token: string) {
           >
           <h1>{{ page === "bank" ? data.bank.name : data.wallet.name }}</h1>
         </div>
-        <RouterLink to="/">トップへ戻る</RouterLink>
+        <RouterLink to="/">{{ words("トップへ戻る","トップへもどる") }}</RouterLink>
+      </div>
+      <div v-if="page==='wallet'" class="language-setting">
+        <span id="kanji-label">かんじ</span>
+        <button type="button" role="switch" aria-labelledby="kanji-label" :aria-checked="kanjiEnabled" :disabled="busy" class="kanji-switch" @click="toggleKanji"><span class="switch-knob"></span><span class="switch-state">{{ kanjiEnabled?'ON':'OFF' }}</span></button>
       </div>
       <section v-if="share" class="panel key-panel">
         <h2>
@@ -403,13 +416,13 @@ function forget(token: string) {
       <template v-else
         ><section class="balance-card">
           <div class="balance-header">
-            <span>いまの残高</span
+            <span>{{ words("いまの残高","いまのコイン") }}</span
             ><button
               class="refresh-button"
               :disabled="busy"
               @click="refreshWallet"
             >
-              {{ busy ? "更新中…" : "残高を更新" }}
+              {{ busy ? words("更新中…","まってね…") : words("残高を更新","コインをたしかめる") }}
             </button>
           </div>
           <strong
@@ -419,20 +432,20 @@ function forget(token: string) {
         </section>
         <div class="columns">
           <section class="panel">
-            <h2>家族に送る</h2>
+            <h2>{{ words("家族に送る","かぞくにおくる") }}</h2>
             <p v-if="!data.wallets.length">
-              送金先のウォレットがまだありません。銀行の管理者に作ってもらいましょう。
+              {{ words("送金先のウォレットがまだありません。銀行の管理者に作ってもらいましょう。","おくるあいてがまだいません。おうちのひとにウォレットをつくってもらいましょう。") }}
             </p>
-            <form @submit.prevent="send">
+            <form @submit.prevent="send" @invalid.capture.prevent="error=words('送り先と金額を確認してください。','おくるあいてとコインのかずをたしかめてください。')">
               <label
-                >送り先<select v-model="toId" required>
-                  <option disabled value="">ウォレットを選択</option>
+                >{{ words("送り先","おくるあいて") }}<select v-model="toId" required>
+                  <option disabled value="">{{ words("ウォレットを選択","ウォレットをえらぶ") }}</option>
                   <option v-for="w in data.wallets" :key="w.id" :value="w.id">
                     {{ w.name }}
                   </option>
                 </select></label
               ><label
-                >金額（{{ data.bank.unit }}）<input
+                >{{ words("金額","コインのかず") }}（{{ data.bank.unit }}）<input
                   v-model="amount"
                   type="number"
                   min="1"
@@ -444,15 +457,15 @@ function forget(token: string) {
                 >メモ<input
                   v-model="memo"
                   maxlength="200"
-                  placeholder="アイス代" /></label
+                  :placeholder="words('アイス代','アイスのおかね')" /></label
               ><button
                 :disabled="busy || !data.wallets.length || !data.wallet.balance"
               >
-                {{ busy ? "処理中…" : "送金する" }}
+                {{ busy ? words("処理中…","まってね…") : words("送金する","おくる") }}
               </button>
             </form>
             <label class="share-label"
-              >このウォレットの秘密URL<input
+              >{{ words("このウォレットの秘密URL","このウォレットのひみつのURL") }}<input
                 readonly
                 :value="url('wallet', key)"
                 @focus="($event.target as HTMLInputElement).select()" /></label
@@ -461,9 +474,9 @@ function forget(token: string) {
             </button>
           </section>
           <section class="panel">
-            <h2>入出金の履歴</h2>
+            <h2>{{ words("入出金の履歴","コインのきろく") }}</h2>
             <p v-if="!entries.length" class="empty">
-              まだ履歴がありません。<br />おてつだいのごほうびを待ってみましょう。
+              {{ words("まだ履歴がありません。","まだきろくがありません。") }}<br />{{ words("おてつだいのごほうびを待ってみましょう。","おてつだいのごほうびをまってみましょう。") }}
             </p>
             <article
               v-for="entry in entries"
@@ -471,7 +484,7 @@ function forget(token: string) {
               class="entry"
             >
               <div>
-                <span class="tag">{{ entry.amount > 0 ? "入金" : "出金" }}</span
+                <span class="tag">{{ entry.amount > 0 ? words("入金","もらった") : words("出金","おくった") }}</span
                 ><strong :class="{ positive: entry.amount > 0 }"
                   >{{ entry.amount > 0 ? "+" : "" }}{{ money(entry.amount) }}
                   <small>{{ data.bank.unit }}</small></strong
@@ -489,18 +502,18 @@ function forget(token: string) {
               :disabled="busy"
               @click="act(() => history(true))"
             >
-              以前の履歴を見る
+              {{ words("以前の履歴を見る","まえのきろくをみる") }}
             </button>
           </section>
         </div></template
       >
     </template>
     <p v-else-if="page !== 'home'">
-      保存した秘密URLからアクセスしてください。
-      <RouterLink to="/">トップへ戻る</RouterLink>
+      {{ words("保存した秘密URLからアクセスしてください。","しまっておいたひみつのURLをひらいてください。") }}
+      <RouterLink to="/">{{ words("トップへ戻る","トップへもどる") }}</RouterLink>
     </p>
   </main>
   <footer>
-    おてつだいウォレット <span>家族の「ありがとう」をつなぐ。</span>
+    おてつだいウォレット <span>{{ words("家族の「ありがとう」をつなぐ。","かぞくの「ありがとう」をつなぐ。") }}</span>
   </footer>
 </template>

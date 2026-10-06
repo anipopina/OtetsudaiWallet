@@ -27,3 +27,17 @@ test('wallet listings use Japanese name order',async()=>{
  const {s,bank,a}=await setup();for(const name of ['わかば','あおい','なつ'])await s.run('POST','/api/bank/wallets',bank.token,{name});
  for(const [path,key] of [['/api/bank',bank.token],['/api/wallet',a.token]]){const names=(await s.run('GET',path,key)).wallets.map((w:any)=>w.name);assert.deepEqual(names,[...names].sort((a,b)=>a.localeCompare(b,'ja')));}
 });
+test('kanji preference persists per wallet, defaults on, and cannot be changed by another role',async()=>{
+ const {s,db,bank,a,b}=await setup();
+ assert.equal((await s.run('GET','/api/wallet',a.token)).wallet.kanjiEnabled,true);
+ await s.run('POST','/api/wallet/settings',a.token,{kanjiEnabled:false,walletId:b.id});
+ assert.equal((await new Service(db).run('GET','/api/wallet',a.token)).wallet.kanjiEnabled,false);
+ assert.equal((await s.run('GET','/api/wallet',b.token)).wallet.kanjiEnabled,true);
+ await assert.rejects(s.run('POST','/api/wallet/settings',bank.token,{kanjiEnabled:false}),{status:403});
+ await assert.rejects(s.run('POST','/api/wallet/settings',a.token,{kanjiEnabled:'false'}),{status:400});
+ await post(s,'/api/bank/issue',bank.token,a.id,30);
+ assert.equal((await s.run('GET','/api/wallet',a.token)).wallet.kanjiEnabled,false);
+ assert.equal((await s.run('GET','/api/wallet',a.token)).wallet.balance,30);
+ const stored=[...db.items.values()].find(x=>x.id===b.id)!;delete stored.kanjiEnabled;
+ assert.equal((await s.run('GET','/api/wallet',b.token)).wallet.kanjiEnabled,true);
+});

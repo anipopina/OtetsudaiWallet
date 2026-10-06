@@ -24,7 +24,7 @@ localStorageは表示名・種別・生のトークンを保存する補助的�
 | PK | SK | データ |
 | --- | --- | --- |
 | BANK#銀行UUID | META | 名前、通貨名、単位、作成日時 |
-| BANK#銀行UUID | WALLET#ウォレットUUID | 名前、整数残高、作成日時、暗号化されたウォレット鍵 |
+| BANK#銀行UUID | WALLET#ウォレットUUID | 名前、整数残高、作成日時、暗号化されたウォレット鍵、kanjiEnabled |
 | KEY#SHA256(鍵) | META | role、bankId、walletId（walletのみ） |
 | LEDGER#ウォレットUUID | TX#UTC日時#取引UUID | 共通取引ID、日時、UTC日付、符号付き金額、種別、相手名、メモ |
 | REQUEST#SHA256(鍵) | 再送防止UUID | リクエスト指紋、取引UUID |
@@ -43,6 +43,7 @@ POSTはJSON、認証が必要な操作にはBearer鍵を送ります。
 | GET | /api/bank/wallets/:id/key | 管理権限で同銀行のwallet tokenを再取得 |
 | POST | /api/bank/issue | toId, amount, memo, requestId → transactionId |
 | GET | /api/wallet | bank, 自分のwallet, 同銀行の送金先一覧 |
+| POST | /api/wallet/settings | kanjiEnabled（boolean）→ 保存した設定。自分のウォレットのみ更新 |
 | POST | /api/wallet/transfer | toId, amount, memo, requestId → transactionId |
 | GET | /api/wallet/history?cursor=... | entries（新しい順、50件）, nextCursor |
 
@@ -55,3 +56,5 @@ POSTはJSON、認証が必要な操作にはBearer鍵を送ります。
 再送防止記録はTTLを設定せず保持します。DynamoDB標準の10分の冪等ウィンドウだけには依存しません。鍵単位のrequestIdと内容ハッシュを照合し、同じ内容なら元の取引IDを返し、変更した内容は拒否します。クライアントは結果が不明な通信エラー時に同じIDを再利用します。銀行・ウォレット作成は自動再送しません。
 
 AWS資料: [DynamoDB transactions](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/transaction-apis.html)、[CloudFront S3 OAC](https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.aws_cloudfront_origins-readme.html)。
+
+「かんじ」の設定はウォレットレコードのkanjiEnabledに保存します。未設定はtrue（ON）。設定更新はattribute_exists条件付きで当該属性のみ更新し、残高や鍵を書き戻しません。クライアントは保存成功後に表示を切り替え、失敗した場合は元の表示を維持します。銀行画面にはスイッチを表示しません。
