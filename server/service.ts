@@ -1,10 +1,12 @@
 import {createHash,randomBytes,randomUUID} from 'node:crypto';
+import {encryptWalletKey,decryptWalletKey} from './wallet-key';
 import {Conflict,type Store,type Item,type Action} from './store';
 export const MAX=1_000_000_000_000;
 const hash=(s:string)=>createHash('sha256').update(s).digest('hex');
 const token=()=>randomBytes(32).toString('base64url');
 export class ApiError extends Error{constructor(public status:number,message:string){super(message);}}
 function text(v:unknown,label:string,max=40){if(typeof v!=='string'||!v.trim()||v.trim().length>max)throw new ApiError(400,`${label}は1〜${max}文字で入力してください。`);return v.trim();}
+const byName=(a:Item,b:Item)=>a.name.localeCompare(b.name,'ja');
 function publicWallet(w:Item){return {id:w.id,name:w.name,balance:w.balance};}
 export class Service{
  constructor(private db:Store){}
@@ -18,14 +20,20 @@ export class Service{
   const pk=`BANK#${access.bankId}`,bank=await this.db.get(pk,'META');if(!bank)throw new ApiError(404,'銀行が見つかりません。');
   const role=access.role;
   if(path.startsWith('/api/bank')&&role!=='bank'||path.startsWith('/api/wallet')&&role!=='wallet')throw new ApiError(403,'この鍵では操作できません。');
-  if(method==='GET'&&path==='/api/bank')return {bank,wallets:(await this.db.list(pk,'WALLET#')).map(publicWallet)};
+  if(method==='GET'&&path==='/api/bank')return {bank,wallets:(await this.db.list(pk,'WALLET#')).sort(byName).map(w=>({...publicWallet(w),hasSecretUrl:!!w.encryptedToken}))};
+  if(method==='GET'&&/^\/api\/bank\/wallets\/[^/]+\/key$/.test(path)){
+   const id=path.split('/')[4],wallet=await this.db.get(pk,`WALLET#${id}`);
+   if(!wallet)throw new ApiError(404,'ウォレットが見つかりません。');
+   if(!wallet.encryptedToken)throw new ApiError(409,'このウォレットは旧方式で作成されたため、秘密URLを再表示できません。作成時に保存したURLをご利用ください。');
+   return {token:decryptWalletKey(wallet.encryptedToken,key,bank.id,id)};
+  }
   if(method==='POST'&&path==='/api/bank/wallets'){
    const name=text(body.name,'ウォレット名'),id=randomUUID(),k=token();
-   await this.db.transact([{put:{pk,sk:`WALLET#${id}`,id,name,balance:0,createdAt:new Date().toISOString()}},{put:{pk:`KEY#${hash(k)}`,sk:'META',role:'wallet',bankId:bank.id,walletId:id}}]);return {token:k,name,id};
+   await this.db.transact([{put:{pk,sk:`WALLET#${id}`,id,name,balance:0,encryptedToken:encryptWalletKey(k,key,bank.id,id),createdAt:new Date().toISOString()}},{put:{pk:`KEY#${hash(k)}`,sk:'META',role:'wallet',bankId:bank.id,walletId:id}}]);return {token:k,name,id};
   }
   if(method==='GET'&&path==='/api/wallet'){
    const wallet=await this.db.get(pk,`WALLET#${access.walletId}`);if(!wallet)throw new ApiError(404,'ウォレットが見つかりません。');
-   return {bank,wallet:publicWallet(wallet),wallets:(await this.db.list(pk,'WALLET#')).filter(w=>w.id!==wallet.id).map(w=>({id:w.id,name:w.name}))};
+   return {bank,wallet:publicWallet(wallet),wallets:(await this.db.list(pk,'WALLET#')).filter(w=>w.id!==wallet.id).sort(byName).map(w=>({id:w.id,name:w.name}))};
   }
   if(method==='GET'&&path==='/api/wallet/history'){
    const all=(await this.db.list(`LEDGER#${access.walletId}`,'TX#')).reverse();

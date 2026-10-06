@@ -13,6 +13,8 @@ infra/       AWS CDK
 
 `/bank?k=<token>` と `/wallet?k=<token>`。32バイトの暗号学的乱数をbase64url化した43文字のトークンを使用。SHA-256ハッシュからサーバーが権限・銀行・ウォレットを解決します。乱数が十分なエントロピーを持つため、パスワード用の低速ハッシュやソルトには依存しません。UUIDは識別子であり権限ではありません。
 
+ウォレットの鍵は再コピー用にAES-256-GCMで暗号化してウォレットレコードに保存します。暗号化鍵は銀行の管理トークンからHKDF-SHA256（salt:銀行ID、用途別info）で導出し、銀行・ウォレットIDをAADで結び付けます。銀行の管理鍵自体は保存しません。再取得APIは銀行権限と所属銀行を検証し、通常の一覧・ウォレットAPIに暗号文や他の鍵を含めません。旧方式で作成したウォレットの鍵は復元できません。
+
 APIはAuthorization: Bearerヘッダーを使用します。銀行・ウォレットの権限は各操作で検証し、クライアントが銀行ID・送金元IDを選ぶことはできません。ウォレット一覧には他のウォレットの鍵や残高を含めません。APIはno-store、サイトはno-referrer、外部スクリプトは使用しません。CloudFront/APIのリクエストアクセスログは有効にせず、秘密URLやヘッダーの記録を避けます。Lambdaにも入力ログを出しません。ログを将来追加する場合も鍵は除去してください。
 
 localStorageは表示名・種別・生のトークンを保存する補助的な鍵の保管場所です。利用者が鍵をコピーして別ブラウザでも使えることが正規のアクセス方式です。XSSで鍵が読まれるため、Vueの文字列エスケープとCloudFront CSPを使用し、v-htmlや外部分析ツールは追加しません。
@@ -22,7 +24,7 @@ localStorageは表示名・種別・生のトークンを保存する補助的�
 | PK | SK | データ |
 | --- | --- | --- |
 | BANK#銀行UUID | META | 名前、通貨名、単位、作成日時 |
-| BANK#銀行UUID | WALLET#ウォレットUUID | 名前、整数残高、作成日時 |
+| BANK#銀行UUID | WALLET#ウォレットUUID | 名前、整数残高、作成日時、暗号化されたウォレット鍵 |
 | KEY#SHA256(鍵) | META | role、bankId、walletId（walletのみ） |
 | LEDGER#ウォレットUUID | TX#UTC日時#取引UUID | 共通取引ID、日時、UTC日付、符号付き金額、種別、相手名、メモ |
 | REQUEST#SHA256(鍵) | 再送防止UUID | リクエスト指紋、取引UUID |
@@ -38,6 +40,7 @@ POSTはJSON、認証が必要な操作にはBearer鍵を送ります。
 | POST | /api/banks | name, currencyName, unit → 管理token, name |
 | GET | /api/bank | bank, wallets（残高含む） |
 | POST | /api/bank/wallets | name → wallet token, id, name |
+| GET | /api/bank/wallets/:id/key | 管理権限で同銀行のwallet tokenを再取得 |
 | POST | /api/bank/issue | toId, amount, memo, requestId → transactionId |
 | GET | /api/wallet | bank, 自分のwallet, 同銀行の送金先一覧 |
 | POST | /api/wallet/transfer | toId, amount, memo, requestId → transactionId |

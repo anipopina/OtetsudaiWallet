@@ -11,3 +11,19 @@ test('duplicate concurrent requests and retries move money once',async()=>{const
 test('wallet cannot manage bank; cross-bank and self transfers denied; raw tokens absent',async()=>{const {s,db,bank,a}=await setup();await assert.rejects(s.run('POST','/api/bank/wallets',a.token,{name:'bad'}),{status:403});await assert.rejects(s.run('GET','/api/wallet',bank.token),{status:403});await assert.rejects(s.run('GET','/api/bank','x'.repeat(43)),{status:401});await assert.rejects(post(s,'/api/wallet/transfer',a.token,a.id,1),{status:400});const other=await s.run('POST','/api/banks',undefined,{name:'別銀行',currencyName:'別コイン',unit:'OTHER'});const w=await s.run('POST','/api/bank/wallets',other.token,{name:'別'});await assert.rejects(post(s,'/api/wallet/transfer',a.token,w.id,1),{status:404});const serialized=JSON.stringify([...db.items]);assert.ok(!serialized.includes(bank.token));assert.ok(!serialized.includes(a.token));});
 test('invalid amounts leave no records',async()=>{const {s,bank,a}=await setup();for(const amount of [0,-1,1.5,NaN,Infinity,Number.MAX_SAFE_INTEGER])await assert.rejects(post(s,'/api/bank/issue',bank.token,a.id,amount),ApiError);assert.equal((await s.run('GET','/api/wallet/history',a.token)).entries.length,0);});
 test('history pagination has no gaps',async()=>{const {s,bank,a}=await setup();for(let i=0;i<53;i++)await post(s,'/api/bank/issue',bank.token,a.id,1);const first=await s.run('GET','/api/wallet/history',a.token);const second=await s.run('GET','/api/wallet/history',a.token,{},first.nextCursor);assert.equal(first.entries.length,50);assert.equal(second.entries.length,3);assert.equal(new Set([...first.entries,...second.entries].map(e=>e.transactionId)).size,53);});
+test('bank can recover wallet keys without storing plaintext or exposing keys to wallets',async()=>{
+ const {s,db,bank,a,b}=await setup();
+ assert.equal((await s.run('GET',`/api/bank/wallets/${a.id}/key`,bank.token)).token,a.token);
+ assert.equal((await s.run('GET',`/api/bank/wallets/${b.id}/key`,bank.token)).token,b.token);
+ await assert.rejects(s.run('GET',`/api/bank/wallets/${b.id}/key`,a.token),{status:403});
+ const other=await s.run('POST','/api/banks',undefined,{name:'別銀行',currencyName:'別コイン',unit:'OTHER'});
+ await assert.rejects(s.run('GET',`/api/bank/wallets/${a.id}/key`,other.token),{status:404});
+ assert.ok(!JSON.stringify([...db.items]).includes(a.token));
+ const info=await s.run('GET','/api/wallet',a.token);assert.ok(!JSON.stringify(info).includes('encryptedToken'));
+ const stored=[...db.items.values()].find(x=>x.id===a.id)!;delete stored.encryptedToken;
+ await assert.rejects(s.run('GET',`/api/bank/wallets/${a.id}/key`,bank.token),{status:409});
+});
+test('wallet listings use Japanese name order',async()=>{
+ const {s,bank,a}=await setup();for(const name of ['わかば','あおい','なつ'])await s.run('POST','/api/bank/wallets',bank.token,{name});
+ for(const [path,key] of [['/api/bank',bank.token],['/api/wallet',a.token]]){const names=(await s.run('GET',path,key)).wallets.map((w:any)=>w.name);assert.deepEqual(names,[...names].sort((a,b)=>a.localeCompare(b,'ja')));}
+});
