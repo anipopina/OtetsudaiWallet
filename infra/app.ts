@@ -11,7 +11,17 @@ import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
 import * as deployment from 'aws-cdk-lib/aws-s3-deployment';
 import * as acm from 'aws-cdk-lib/aws-certificatemanager';
 import * as logs from 'aws-cdk-lib/aws-logs';
+import * as route53 from 'aws-cdk-lib/aws-route53';
+import * as targets from 'aws-cdk-lib/aws-route53-targets';
 import {resolve} from 'node:path';
+class CertificateStack extends cdk.Stack {
+ constructor(scope:Construct,id:string,props:cdk.StackProps){super(scope,id,props);
+  const zone=route53.HostedZone.fromHostedZoneAttributes(this,'Zone',{hostedZoneId:this.node.getContext('hostedZoneId'),zoneName:this.node.getContext('zoneName')});
+  const certificate=new acm.Certificate(this,'Certificate',{domainName:this.node.getContext('domainName'),validation:acm.CertificateValidation.fromDns(zone)});
+  certificate.applyRemovalPolicy(cdk.RemovalPolicy.RETAIN);
+  new cdk.CfnOutput(this,'CertificateArn',{value:certificate.certificateArn});
+ }
+}
 class WalletStack extends cdk.Stack{
  constructor(scope:Construct,id:string,props:cdk.StackProps){super(scope,id,props);
  const table=new dynamodb.Table(this,'Ledger',{partitionKey:{name:'pk',type:dynamodb.AttributeType.STRING},sortKey:{name:'sk',type:dynamodb.AttributeType.STRING},billingMode:dynamodb.BillingMode.PAY_PER_REQUEST,pointInTimeRecoverySpecification:{pointInTimeRecoveryEnabled:true},removalPolicy:cdk.RemovalPolicy.RETAIN});
@@ -23,8 +33,18 @@ class WalletStack extends cdk.Stack{
  const rewrite=new cloudfront.Function(this,'SpaRoutes',{code:cloudfront.FunctionCode.fromInline("function handler(event) { var r=event.request; if(r.uri==='/' || r.uri==='/bank' || r.uri==='/wallet') { r.uri='/index.html'; r.querystring={}; } return r; }")});
  const certificateArn=this.node.tryGetContext('certificateArn');const domainName=this.node.tryGetContext('domainName')??'otetsudai-wallet.anipopina.com';
  const distribution=new cloudfront.Distribution(this,'Distribution',{...(certificateArn?{domainNames:[domainName],certificate:acm.Certificate.fromCertificateArn(this,'Certificate',certificateArn)}:{}),defaultBehavior:{origin:origins.S3BucketOrigin.withOriginAccessControl(bucket),viewerProtocolPolicy:cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,responseHeadersPolicy:headers,functionAssociations:[{function:rewrite,eventType:cloudfront.FunctionEventType.VIEWER_REQUEST}]},additionalBehaviors:{'/api/*':{origin:new origins.HttpOrigin(cdk.Fn.select(2,cdk.Fn.split('/',api.apiEndpoint))),allowedMethods:cloudfront.AllowedMethods.ALLOW_ALL,cachePolicy:cloudfront.CachePolicy.CACHING_DISABLED,originRequestPolicy:cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,viewerProtocolPolicy:cloudfront.ViewerProtocolPolicy.HTTPS_ONLY,responseHeadersPolicy:headers}}});
+ const hostedZoneId=this.node.tryGetContext('hostedZoneId');
+ if(certificateArn&&hostedZoneId){
+  const zone=route53.HostedZone.fromHostedZoneAttributes(this,'Zone',{hostedZoneId,zoneName:this.node.getContext('zoneName')});
+  const target=route53.RecordTarget.fromAlias(new targets.CloudFrontTarget(distribution));
+  new route53.ARecord(this,'DomainAlias',{zone,recordName:domainName,target});
+  new route53.AaaaRecord(this,'DomainAliasIpv6',{zone,recordName:domainName,target});
+ }
  new deployment.BucketDeployment(this,'PublishFrontend',{sources:[deployment.Source.asset(resolve('dist'))],destinationBucket:bucket,distribution,distributionPaths:['/*']});
- new cdk.CfnOutput(this,'WebsiteUrl',{value:`https://${distribution.distributionDomainName}`});new cdk.CfnOutput(this,'DistributionDomain',{value:distribution.distributionDomainName});new cdk.CfnOutput(this,'ApiEndpoint',{value:api.apiEndpoint});
+ new cdk.CfnOutput(this,'WebsiteUrl',{value:certificateArn?`https://${domainName}`:`https://${distribution.distributionDomainName}`});new cdk.CfnOutput(this,'DistributionDomain',{value:distribution.distributionDomainName});new cdk.CfnOutput(this,'TableName',{value:table.tableName});new cdk.CfnOutput(this,'ApiEndpoint',{value:api.apiEndpoint});
  }
 }
-const app=new cdk.App();new WalletStack(app,'OtetsudaiWallet',{env:{account:process.env.CDK_DEFAULT_ACCOUNT,region:process.env.CDK_DEFAULT_REGION??'ap-northeast-1'},terminationProtection:true});
+const app=new cdk.App();
+const account=app.node.tryGetContext('account')??process.env.CDK_DEFAULT_ACCOUNT;
+if(app.node.tryGetContext('hostedZoneId'))new CertificateStack(app,'OtetsudaiWalletCertificate',{env:{account,region:'us-east-1'},terminationProtection:true});
+new WalletStack(app,'OtetsudaiWallet',{env:{account,region:process.env.CDK_DEFAULT_REGION??'ap-northeast-1'},terminationProtection:true});

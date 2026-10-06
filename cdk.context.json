@@ -1,0 +1,7 @@
+{
+  "account": "209018279507",
+  "domainName": "otetsudai-wallet.anipopina.com",
+  "zoneName": "anipopina.com",
+  "hostedZoneId": "Z100947420XSLWOY8HP9I",
+  "certificateArn": "arn:aws:acm:us-east-1:209018279507:certificate/f0e83c9e-0a2b-48ca-bc49-1ecfbab3aa63"
+}

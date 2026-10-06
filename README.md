@@ -26,27 +26,34 @@ npm run test:e2e
 
 AWS CDKのTypeScript構成です。S3は非公開、CloudFront OAC経由で配信します。APIは同じホストの `/api/*` → API Gateway HTTP API → Lambda → DynamoDB。通常の画面リクエストはCloudFront Functionでindex.htmlへ書き換え、オリジンへ鍵を転送しません。APIはBearerヘッダーで鍵を受け取り、キャッシュしません。
 
-AWSへのデプロイはまだ実行していません。認証済みAWSプロファイルと対象アカウントを確認してから実行してください。
+対象アカウントは `209018279507`、AWSプロファイルは `ai-dev`、アプリのリージョンは `ap-northeast-1` です。公開URLは https://otetsudai-wallet.anipopina.com です。
+
+`cdk.context.json` にアカウント、ドメイン、既存Hosted Zone ID、発行済み証明書ARNを保存しています。証明書は `OtetsudaiWalletCertificate` スタック（`us-east-1`）、アプリは `OtetsudaiWallet` スタック（東京）で管理します。証明書のDNS検証CNAMEと、CloudFront向けA/AAAA AliasもCDKが作成します。Hosted Zone自体は既存のものを参照します。
+
+通常の更新は次の手順です。証明書スタックはアプリ更新のたびにデプロイする必要はありません。
 
 ```sh
-export AWS_PROFILE=your-profile
+export AWS_PROFILE=ai-dev
 export AWS_REGION=ap-northeast-1
-aws sts get-caller-identity
-npx cdk bootstrap
+aws sts get-caller-identity --profile ai-dev
+npm run typecheck
+npm test
 npm run build
-npm run synth
-npx cdk diff
-npx cdk deploy
+npx cdk synth OtetsudaiWallet --strict --profile ai-dev
+npx cdk diff OtetsudaiWallet --profile ai-dev
+npx cdk deploy OtetsudaiWallet --profile ai-dev
 ```
 
-初回はCloudFront既定ドメインで利用できます。予定ホスト名 `otetsudai-wallet.anipopina.com` を使う場合は、先に **us-east-1** のACMでこのホストの証明書を発行・検証し、ARNを指定します。
+初回bootstrapは両リージョンで実施済みです。別アカウントで使う場合は `cdk.context.json` の対象アカウント・Hosted Zone・証明書ARNをその環境のものに置き換えてください。新しい証明書を発行するときは、先に証明書スタックをデプロイし、出力されたARNをcontextへ設定してからアプリをデプロイします。DNS検証CNAMEは証明書の自動更新にも必要なので残してください。
 
 ```sh
-npx cdk diff -c certificateArn=arn:aws:acm:us-east-1:ACCOUNT:certificate/ID
-npx cdk deploy -c certificateArn=arn:aws:acm:us-east-1:ACCOUNT:certificate/ID
+npx cdk bootstrap aws://ACCOUNT/us-east-1 aws://ACCOUNT/ap-northeast-1 --profile PROFILE
+npx cdk diff OtetsudaiWalletCertificate --profile PROFILE
+npx cdk deploy OtetsudaiWalletCertificate --profile PROFILE
+# 出力されたCertificateArnをcdk.context.jsonへ設定
+npx cdk diff OtetsudaiWallet --profile PROFILE
+npx cdk deploy OtetsudaiWallet --profile PROFILE
 ```
-
-DNSで出力されたDistributionDomainへCNAME（またはDNSプロバイダーのALIAS）を設定してください。DNSは既存環境が不明なためIaCに含めていません。別ホスト名は `-c domainName=...` を併用します。以後のdiff/deployでも同じcontextを指定してください。
 
 DynamoDBにはPITRとRETAIN、スタックには削除保護を設定しています。S3もRETAINです。意図的に削除しても保存データとバケットは残ります。銀行の管理鍵はDBから復元できません。各ウォレットの鍵は銀行の管理鍵で暗号化して保存し、銀行ページの一覧からコピーできます。
 
@@ -64,6 +71,19 @@ API・データモデル・整合性については [docs/design.md](docs/design
 
 ## 検証の限界
 
-サービスの自動テストはMemoryStore上で実行します。DynamoDB用の条件付きトランザクションは実装済みですが、実際のAWSでの疎通・同時送金はデプロイ後に検証してください。
+通常のサービステストはMemoryStore上で実行します。2026-10-06の初回デプロイ時には実際のAWSでも、発行、同一要求の再送・同時再送、送金、残高・履歴、ウォレット設定、秘密URL再取得、権限拒否、残高不足を検証しました。公開サイトのトップ・銀行・ウォレット画面とCSPもChromiumで確認済みです。検証用データは削除しました。
+
+Route 53の権威DNSとGoogle Public DNSでAliasのIPv4応答を確認し、公開ホストのTLS証明書も検証しました。初回確認時は開発環境のローカルDNSが古い否定応答をキャッシュしていたため、公開DNSで得たIPv4をテスト用に指定して確認しています。サイトの設定を変更する回避策は入れていません。
+
+実環境の検証を繰り返す場合は次を実行できます（検証用の銀行・ウォレット・取引を一時的に作成し、その検証で作成したレコードだけを削除します）。
+
+```sh
+AWS_PROFILE=ai-dev AWS_REGION=ap-northeast-1 \
+TABLE_NAME=OtetsudaiWallet-LedgerB7379752-9EIEL7M7FIBH \
+LIVE_URL=https://otetsudai-wallet.anipopina.com \
+node --import tsx scripts/smoke-live.ts
+```
+
+Chromiumが利用できる場合は `VERIFY_BROWSER=1` を追加すると画面も検証します。
 
 CDK 2.272.0に同梱された開発用依存 `brace-expansion 5.0.9` にnpm auditのhigh指摘が残っています。これはフロントエンド・Lambdaのバンドルには含まれません。CDKの同梱依存のため通常のnpm audit fixでは解消できず、上流修正版への更新が必要です。外部から取得したglob式をCDKに入力しないでください。

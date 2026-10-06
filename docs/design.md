@@ -58,3 +58,7 @@ POSTはJSON、認証が必要な操作にはBearer鍵を送ります。
 AWS資料: [DynamoDB transactions](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/transaction-apis.html)、[CloudFront S3 OAC](https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.aws_cloudfront_origins-readme.html)。
 
 「かんじ」の設定はウォレットレコードのkanjiEnabledに保存します。未設定はtrue（ON）。設定更新はattribute_exists条件付きで当該属性のみ更新し、残高や鍵を書き戻しません。クライアントは保存成功後に表示を切り替え、失敗した場合は元の表示を維持します。銀行画面にはスイッチを表示しません。
+
+## 初回デプロイ環境
+
+アプリ: OtetsudaiWallet / ap-northeast-1。証明書: OtetsudaiWalletCertificate / us-east-1。アカウント: 209018279507、プロファイル: ai-dev。既存のanipopina.com公開Hosted Zoneを参照し、ACMのDNS検証CNAME、CloudFront向けA/AAAA Aliasを作成します。環境値と証明書ARNはcdk.context.jsonで管理し、証明書を別スタックにすることでアプリ更新と分離しています。

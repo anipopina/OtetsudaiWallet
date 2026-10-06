@@ -9,7 +9,7 @@
     "typecheck": "vue-tsc --noEmit && tsc -p tsconfig.server.json --noEmit",
     "test": "node --import tsx tests/service.test.ts",
     "synth": "cdk synth --strict",
-    "deploy": "npm run build && cdk deploy",
+    "deploy": "npm run build && cdk deploy OtetsudaiWallet",
     "test:e2e": "playwright test"
   },
   "dependencies": {
