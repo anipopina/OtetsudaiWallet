@@ -18,9 +18,9 @@ async function request(url:string,options:RequestInit={}):Promise<Response>{
 }
 async function api(path:string,key?:string,body?:unknown){const res=await request(`${base}/api/${path}`,{method:body?'POST':'GET',headers:{...(key?{Authorization:`Bearer ${key}`} : {}),...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{})});const result=await res.json();assert.equal(res.status,200,result.message);return result;}
 try{
- const bank=await api('banks',undefined,{name:'デプロイ検証専用銀行',currencyName:'テストコイン',unit:'TEST'});remember(`KEY#${hash(bank.token)}`,'META');
+ const bank=await api('banks',undefined,{name:'デプロイ検証専用銀行',currencyName:'テストコイン',unit:'TEST'});assert.ok(/^[A-Za-z0-9_-]{22}$/.test(bank.token),'Bank token must be 22 characters');remember(`KEY#${hash(bank.token)}`,'META');
  const info=await api('bank',bank.token);const pk=`BANK#${info.bank.id}`;remember(pk,'META');
- const make=async(name:string)=>{const w=await api('bank/wallets',bank.token,{name});remember(pk,`WALLET#${w.id}`);remember(`KEY#${hash(w.token)}`,'META');walletIds.push(w.id);return w;};
+ const make=async(name:string)=>{const w=await api('bank/wallets',bank.token,{name});assert.ok(/^[A-Za-z0-9_-]{22}$/.test(w.token),'Wallet token must be 22 characters');remember(pk,`WALLET#${w.id}`);remember(`KEY#${hash(w.token)}`,'META');walletIds.push(w.id);return w;};
  const a=await make('検証用こども'),b=await make('検証用おや');
  assert.ok((await api(`bank/wallets/${a.id}/key`,bank.token)).token===a.token,'Wallet key recovery mismatch');
  const issue={toId:a.id,amount:30,memo:'発行検証',requestId:randomUUID()};remember(`REQUEST#${hash(bank.token)}`,issue.requestId);

@@ -3,7 +3,7 @@ import {encryptWalletKey,decryptWalletKey} from './wallet-key';
 import {Conflict,type Store,type Item,type Action} from './store';
 export const MAX=1_000_000_000_000;
 const hash=(s:string)=>createHash('sha256').update(s).digest('hex');
-const token=()=>randomBytes(32).toString('base64url');
+const token=()=>randomBytes(16).toString('base64url');
 export class ApiError extends Error{constructor(public status:number,message:string){super(message);}}
 function text(v:unknown,label:string,max=40){if(typeof v!=='string'||!v.trim()||v.trim().length>max)throw new ApiError(400,`${label}は1〜${max}文字で入力してください。`);return v.trim();}
 const byName=(a:Item,b:Item)=>a.name.localeCompare(b.name,'ja');
@@ -15,7 +15,7 @@ export class Service{
    const name=text(body.name,'銀行名'),currencyName=text(body.currencyName,'通貨名'),unit=text(body.unit,'通貨単位',12);const id=randomUUID(),k=token(),createdAt=new Date().toISOString();
    await this.db.transact([{put:{pk:`BANK#${id}`,sk:'META',id,name,currencyName,unit,createdAt}},{put:{pk:`KEY#${hash(k)}`,sk:'META',role:'bank',bankId:id}}]);return {token:k,name};
   }
-  if(!key||!/^[A-Za-z0-9_-]{43}$/.test(key))throw new ApiError(401,'秘密URLが無効です。保存したURLを開いてください。');
+  if(!key||!/^[A-Za-z0-9_-]{22}$/.test(key))throw new ApiError(401,'秘密URLが無効です。保存したURLを開いてください。');
   const access=await this.db.get(`KEY#${hash(key)}`,'META');if(!access)throw new ApiError(401,'秘密URLが無効です。');
   const pk=`BANK#${access.bankId}`,bank=await this.db.get(pk,'META');if(!bank)throw new ApiError(404,'銀行が見つかりません。');
   const role=access.role;
