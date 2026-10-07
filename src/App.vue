@@ -37,9 +37,12 @@ const words = (normal: string, simple: string) =>
   easy.value ? simple : normal;
 const message = (value: string) => (easy.value ? walletMessage(value) : value);
 const toast = ref("");
+type ToastType = "success" | "error" | "warning" | "info";
+const toastType = ref<ToastType>("success");
 let toastTimer: ReturnType<typeof setTimeout> | undefined;
-function showToast(message: string) {
+function showToast(message: string, type: ToastType = "success") {
   clearTimeout(toastTimer);
+  toastType.value = type;
   toast.value = message;
   toastTimer = setTimeout(() => {
     toast.value = "";
@@ -68,6 +71,7 @@ function remember(item: SavedKey) {
   if (!saveKey(item))
     showToast(
       "このブラウザに保存できませんでした。秘密URLをコピーして大切に保管してください。",
+      "warning",
     );
   saved.value = readKeys();
 }
@@ -109,6 +113,18 @@ async function load() {
   }
 }
 watch(() => route.fullPath, load, { immediate: true });
+watch(
+  () =>
+    (page.value === "bank"
+      ? data.value?.bank?.name
+      : page.value === "wallet"
+        ? data.value?.wallet?.name
+        : null) ?? "おてつだいウォレット",
+  (title) => {
+    document.title = title;
+  },
+  { immediate: true },
+);
 async function act(task: () => Promise<void>) {
   if (busy.value) return;
   busy.value = true;
@@ -172,7 +188,7 @@ async function copy(value: string) {
     await navigator.clipboard.writeText(value);
     showToast("秘密URLをコピーしました");
   } catch {
-    showToast("コピーできませんでした。URL欄を選択してコピーしてください。");
+    showToast("コピーできませんでした。URL欄を選択してコピーしてください。", "error");
   }
 }
 async function copyWallet(id: string) {
@@ -185,7 +201,7 @@ async function refreshWallet() {
   await act(async () => {
     data.value = await api("wallet");
     await history();
-    showToast("残高と履歴を更新しました");
+    showToast("残高と履歴を更新しました", "info");
   });
 }
 async function toggleKanji() {
@@ -198,7 +214,7 @@ async function toggleKanji() {
 }
 function forget(token: string) {
   if (!forgetKey(token))
-    showToast("ブラウザの保存情報を更新できませんでした。");
+    showToast("ブラウザの保存情報を更新できませんでした。", "warning");
   saved.value = readKeys();
 }
 </script>
@@ -212,13 +228,18 @@ function forget(token: string) {
       ></RouterLink
     ><span class="header-note">{{
       words(
-        "家族のおてつだいを、うれしい貯金に。",
-        "かぞくのおてつだいを、うれしいちょきんに。",
+        "「ありがとう」を、わが家のコインで。",
+        "「ありがとう」を、わがやのコインで。",
       )
     }}</span>
   </header>
   <Transition name="toast"
-    ><div v-if="toast" class="toast" role="status">
+    ><div
+      v-if="toast"
+      class="toast"
+      :class="`toast-${toastType}`"
+      :role="toastType === 'error' ? 'alert' : 'status'"
+    >
       {{ message(toast) }}
     </div></Transition
   >
@@ -231,9 +252,6 @@ function forget(token: string) {
       <section class="hero">
         <span class="eyebrow">家族だけの小さな銀行</span>
         <h1>「ありがとう」が<br />貯まるウォレット。</h1>
-        <p>
-          おふろ洗いも、お片づけも。<br />おてつだいのごほうびを、家族のコインで。
-        </p>
         <div class="hero-card">
           <span>たとえば、今日のおてつだい</span
           ><strong>+30 <small>DNG</small></strong
@@ -293,7 +311,7 @@ function forget(token: string) {
             </div>
           </section>
           <p class="storage-note">
-            アクセスした鍵は、このブラウザに保存されます。家族以外と共有する端末では、利用後に一覧から外してください。ブラウザのデータを消すと保存した鍵も消えます。
+            アクセスした銀行とウォレットの鍵は、このブラウザに保存されます。家族以外と共有する端末では、利用後に一覧から外してください。ブラウザのデータを消すと保存した鍵も消えます。
           </p>
         </div>
       </div>
@@ -302,7 +320,7 @@ function forget(token: string) {
       {{ words("読み込み中…", "よみこみちゅう…") }}
     </p>
     <template v-else-if="data">
-      <div class="page-title">
+      <div class="page-title" :class="{ 'wallet-title': page === 'wallet' }">
         <div>
           <span class="eyebrow"
             >{{ page === "bank" ? "銀行の管理" : "マイウォレット" }} ·
@@ -310,30 +328,28 @@ function forget(token: string) {
           >
           <h1>{{ page === "bank" ? data.bank.name : data.wallet.name }}</h1>
         </div>
-        <RouterLink to="/">{{
-          words("トップへ戻る", "トップへもどる")
-        }}</RouterLink>
-      </div>
-      <div v-if="page === 'wallet'" class="language-setting">
-        <span id="kanji-label">かんじ</span>
-        <button
-          type="button"
-          role="switch"
-          aria-labelledby="kanji-label"
-          :aria-checked="kanjiEnabled"
-          :disabled="busy"
-          class="kanji-switch"
-          @click="toggleKanji"
-        >
-          <span class="switch-knob"></span
-          ><span class="switch-state">{{ kanjiEnabled ? "ON" : "OFF" }}</span>
-        </button>
+        <RouterLink v-if="page === 'bank'" to="/">トップへ戻る</RouterLink>
+        <div v-if="page === 'wallet'" class="language-setting">
+          <span id="kanji-label">かんじ</span>
+          <button
+            type="button"
+            role="switch"
+            aria-labelledby="kanji-label"
+            :aria-checked="kanjiEnabled"
+            :disabled="busy"
+            class="kanji-switch"
+            @click="toggleKanji"
+          >
+            <span class="switch-knob"></span
+            ><span class="switch-state">{{ kanjiEnabled ? "ON" : "OFF" }}</span>
+          </button>
+        </div>
       </div>
       <section v-if="share" class="panel key-panel">
         <h2>
           {{
             share.type === "bank"
-              ? "銀行ができました。管理URLを保存しましょう"
+              ? "銀行ができました。秘密URLを保存しましょう"
               : `「${share.name}」のウォレットができました`
           }}
         </h2>
@@ -346,7 +362,7 @@ function forget(token: string) {
           </p></template
         >
         <p v-else>
-          このURLを家族に渡してください。開いた人は、このウォレットの残高を見たり送金したりできます。銀行の管理URLは渡さないでください。
+          このURLを家族に渡してください。開いた人は、このウォレットの残高を見たり送金したりできます。銀行の秘密URLは渡さないでください。
         </p>
         <label
           >秘密URL<input
@@ -390,7 +406,7 @@ function forget(token: string) {
                   v-model="walletName"
                   required
                   maxlength="40"
-                  placeholder="太郎 / ママ / パパ / …" /></label
+                  placeholder="たろうのウォレット" /></label
               ><button :disabled="busy">ウォレットを作る</button>
             </form>
             <small
@@ -399,19 +415,18 @@ function forget(token: string) {
           </section>
           <section class="panel">
             <h2>銀行の鍵を保管する</h2>
-            <p>銀行の管理URLは、信頼できる管理者だけが保管してください。</p>
+            <p>銀行の秘密URLは、信頼できる管理者だけが保管してください。</p>
             <label
               >銀行の秘密URL<input
                 readonly
                 :value="url('bank', key)"
                 @focus="($event.target as HTMLInputElement).select()" /></label
             ><button class="secondary" @click="copy(url('bank', key))">
-              管理URLをコピー
+              秘密URLをコピー
             </button>
           </section>
         </div>
         <section class="panel">
-          <span class="eyebrow">おてつだいのごほうび</span>
           <h2>通貨を発行して送る</h2>
           <p>
             選んだウォレットに、新しい{{ data.bank.currencyName }}を発行します。
@@ -530,8 +545,8 @@ function forget(token: string) {
               {{ words("まだ履歴がありません。", "まだきろくがありません。")
               }}<br />{{
                 words(
-                  "おてつだいのごほうびを待ってみましょう。",
-                  "おてつだいのごほうびをまってみましょう。",
+                  "おてつだいをしてコインを貰いましょう。",
+                  "おてつだいをしてコインをもらいましょう。",
                 )
               }}
             </p>
