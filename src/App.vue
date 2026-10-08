@@ -3,6 +3,7 @@ import { computed, ref, watch, nextTick, onUnmounted } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { readKeys, saveKey, forgetKey, type SavedKey } from "./keys";
 import { walletMessage } from "./wallet-language";
+import donguriIcon from "./assets/acorn-icon-96.png";
 const route = useRoute(),
   router = useRouter();
 const page = computed(() => route.path.slice(1) || "home"),
@@ -188,7 +189,10 @@ async function copy(value: string) {
     await navigator.clipboard.writeText(value);
     showToast("秘密URLをコピーしました");
   } catch {
-    showToast("コピーできませんでした。URL欄を選択してコピーしてください。", "error");
+    showToast(
+      "コピーできませんでした。URL欄を選択してコピーしてください。",
+      "error",
+    );
   }
 }
 async function copyWallet(id: string) {
@@ -222,8 +226,13 @@ function forget(token: string) {
 <template>
   <header>
     <RouterLink to="/" class="brand"
-      ><span class="brand-icon">W</span
-      ><span
+      ><img
+        :src="donguriIcon"
+        class="brand-icon"
+        alt=""
+        width="42"
+        height="42"
+      /><span
         >おてつだいウォレット<small>Otetsudai Wallet</small></span
       ></RouterLink
     ><span class="header-note">{{

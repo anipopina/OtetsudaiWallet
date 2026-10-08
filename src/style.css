@@ -46,14 +46,11 @@ header {
   font-weight: 500;
 }
 .brand-icon {
-  display: grid;
-  place-items: center;
-  background: #276b51;
-  color: white;
+  display: block;
   width: 42px;
   height: 42px;
-  border-radius: 14px;
-  font-size: 23px;
+  object-fit: contain;
+  flex-shrink: 0;
 }
 .header-note {
   font-size: 12px;
