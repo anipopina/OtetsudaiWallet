@@ -5,6 +5,17 @@ import {Service,ApiError} from '../server/service';
 import {MemoryStore} from '../server/store';
 async function setup(){const db=new MemoryStore(),s=new Service(db);const bank=await s.run('POST','/api/banks',undefined,{name:'太郎銀行',currencyName:'太郎コイン',unit:'TARO'});const a=await s.run('POST','/api/bank/wallets',bank.token,{name:'太郎'}),b=await s.run('POST','/api/bank/wallets',bank.token,{name:'パパ'});return {s,db,bank,a,b};}
 const post=(s:Service,path:string,key:string,toId:string,amount:number,requestId=randomUUID())=>s.run('POST',path,key,{toId,amount,memo:'おふろ洗い',requestId});
+test('history balances include older pages, outgoing transfers and legacy entries', async()=>{
+ const {s,db,a}=await setup();
+ const amounts=[30,-20,-10,...Array(51).fill(1)];
+ let balance=0;
+ const balances=amounts.map(amount=>balance+=amount);
+ await db.transact(amounts.map((amount,i)=>({put:{pk:`LEDGER#${a.id}`,sk:`TX#${String(i).padStart(4,'0')}`,transactionId:String(i),amount}})));
+ const first=await s.run('GET','/api/wallet/history',a.token);
+ const second=await s.run('GET','/api/wallet/history',a.token,{},first.nextCursor);
+ assert.deepEqual([...first.entries,...second.entries].map(e=>e.balanceAfter),balances.reverse());
+ assert.equal(second.nextCursor,null);
+});
 test('issue and transfer record both histories and conserve balances',async()=>{const {s,bank,a,b}=await setup();await post(s,'/api/bank/issue',bank.token,a.id,30);await post(s,'/api/wallet/transfer',a.token,b.id,20);assert.equal((await s.run('GET','/api/wallet',a.token)).wallet.balance,10);assert.equal((await s.run('GET','/api/wallet',b.token)).wallet.balance,20);const h=await s.run('GET','/api/wallet/history',a.token);assert.deepEqual(h.entries.map((e:any)=>e.amount).sort((a:number,b:number)=>a-b),[-20,30]);assert.equal(h.entries[0].memo,'おふろ洗い');});
 test('concurrent double spend is rejected atomically',async()=>{const {s,bank,a,b}=await setup();await post(s,'/api/bank/issue',bank.token,a.id,30);const results=await Promise.allSettled([post(s,'/api/wallet/transfer',a.token,b.id,20),post(s,'/api/wallet/transfer',a.token,b.id,20)]);assert.equal(results.filter(x=>x.status==='fulfilled').length,1);assert.equal((await s.run('GET','/api/wallet',a.token)).wallet.balance,10);assert.equal((await s.run('GET','/api/wallet/history',b.token)).entries.length,1);});
 test('duplicate concurrent requests and retries move money once',async()=>{const {s,bank,a}=await setup();const id=randomUUID();const result=await Promise.all([post(s,'/api/bank/issue',bank.token,a.id,30,id),post(s,'/api/bank/issue',bank.token,a.id,30,id)]);assert.equal(result[0].transactionId,result[1].transactionId);await post(s,'/api/bank/issue',bank.token,a.id,30,id);assert.equal((await s.run('GET','/api/wallet',a.token)).wallet.balance,30);await assert.rejects(post(s,'/api/bank/issue',bank.token,a.id,31,id),{status:409});});

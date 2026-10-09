@@ -41,7 +41,12 @@ export class Service{
    return {kanjiEnabled:body.kanjiEnabled};
   }
   if(method==='GET'&&path==='/api/wallet/history'){
-   const all=(await this.db.list(`LEDGER#${access.walletId}`,'TX#')).reverse();
+   // Sum the complete ledger before pagination so older pages retain their balances.
+   let balance=0;
+   const all=(await this.db.list(`LEDGER#${access.walletId}`,'TX#')).map(entry=>{
+    balance+=entry.amount;
+    return {...entry,balanceAfter:balance};
+   }).reverse();
    let start=0;if(cursor){start=all.findIndex(x=>x.sk===cursor)+1;if(start===0)throw new ApiError(400,'履歴の位置が無効です。');}
    const entries=all.slice(start,start+50);return {entries,nextCursor:start+50<all.length?entries.at(-1)?.sk:null};
   }

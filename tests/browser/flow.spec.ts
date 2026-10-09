@@ -144,7 +144,7 @@ test("kanji switch persists across browsers, stays wallet-specific and covers wa
   const other = await context.newPage();
   await other.goto(`http://127.0.0.1:5173/wallet?k=${a.token}`);
   await expect(other.getByRole("switch", { name: "かんじ" })).not.toBeChecked();
-  await other.getByRole("button", { name: "コインをたしかめる" }).click();
+  await other.getByRole("button", { name: "よみなおす" }).click();
   await expect(other.locator(".toast")).toHaveText(
     "コインときろくをあたらしくしました",
   );

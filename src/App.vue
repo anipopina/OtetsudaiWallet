@@ -4,6 +4,7 @@ import { useRoute, useRouter } from "vue-router";
 import { readKeys, saveKey, forgetKey, type SavedKey } from "./keys";
 import { walletMessage } from "./wallet-language";
 import donguriIcon from "./assets/acorn-icon-96.png";
+import MaterialIcon from "./components/MaterialIcon.vue";
 const route = useRoute(),
   router = useRouter();
 const page = computed(() => route.path.slice(1) || "home"),
@@ -36,6 +37,17 @@ const easy = computed(
 );
 const words = (normal: string, simple: string) =>
   easy.value ? simple : normal;
+const historyBalanceMax = computed(() =>
+  entries.value.reduce(
+    (max, entry) => Math.max(max, entry.balanceAfter ?? 0),
+    0,
+  ),
+);
+function historyBalanceWidth(entry: { balanceAfter?: number }) {
+  return historyBalanceMax.value > 0
+    ? `${(Math.max(0, entry.balanceAfter ?? 0) / historyBalanceMax.value) * 100}%`
+    : "0%";
+}
 const message = (value: string) => (easy.value ? walletMessage(value) : value);
 const toast = ref("");
 type ToastType = "success" | "error" | "warning" | "info";
@@ -303,7 +315,14 @@ function forget(token: string) {
             :key="type"
             class="panel saved"
           >
-            <h2>このブラウザの{{ type === "bank" ? "銀行" : "ウォレット" }}</h2>
+            <h2>
+              このブラウザの{{ type === "bank" ? "銀行" : "ウォレット" }}
+              <MaterialIcon
+                :name="
+                  type === 'bank' ? 'account_balance' : 'account_balance_wallet'
+                "
+              />
+            </h2>
             <p v-if="!saved.some((x) => x.type === type)" class="empty">
               まだ保存されていません。<br />秘密URLを開くと、ここに表示されます。
             </p>
@@ -335,7 +354,12 @@ function forget(token: string) {
             >{{ page === "bank" ? "銀行の管理" : "マイウォレット" }} ·
             {{ data.bank.currencyName }}</span
           >
-          <h1>{{ page === "bank" ? data.bank.name : data.wallet.name }}</h1>
+          <h1>
+            <MaterialIcon
+              :name="page === 'bank' ? 'account_balance' : 'account_balance_wallet'"
+            />
+            <span>{{ page === "bank" ? data.bank.name : data.wallet.name }}</span>
+          </h1>
         </div>
         <RouterLink v-if="page === 'bank'" to="/">トップへ戻る</RouterLink>
         <div v-if="page === 'wallet'" class="language-setting">
@@ -476,8 +500,9 @@ function forget(token: string) {
               {{
                 busy
                   ? words("更新中…", "まってね…")
-                  : words("残高を更新", "コインをたしかめる")
+                  : words("残高を更新", "よみなおす")
               }}
+              <MaterialIcon name="sync" />
             </button>
           </div>
           <strong
@@ -563,6 +588,7 @@ function forget(token: string) {
               v-for="entry in entries"
               :key="entry.transactionId"
               class="entry"
+              :style="{ '--entry-balance-width': historyBalanceWidth(entry) }"
             >
               <div>
                 <span class="tag">{{
