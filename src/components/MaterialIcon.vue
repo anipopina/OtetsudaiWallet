@@ -3,7 +3,10 @@ import accountBalance from "../assets/material-icons/account_balance.svg?raw";
 import accountBalanceWallet from "../assets/material-icons/account_balance_wallet.svg?raw";
 import sync from "../assets/material-icons/sync.svg?raw";
 
+import savings from "../assets/material-icons/savings.svg?raw";
+
 const icons = {
+  savings,
   account_balance: accountBalance,
   account_balance_wallet: accountBalanceWallet,
   sync,

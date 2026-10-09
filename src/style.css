@@ -547,3 +547,15 @@ input[readonly] {
   outline: 3px solid #639776;
   outline-offset: 3px;
 }
+
+.balance-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 8px;
+}
+.balance-footer > span { font-size: 13px; color: #d2e7ce; overflow-wrap: anywhere; min-width: 0; }
+.view-coins-button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; margin-left: auto; padding: 7px 12px; font-size: 12px; background: #f5d880; color: #304d3b; }
+.view-coins-button:hover { background: #ffe8a4; }

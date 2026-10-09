@@ -5,6 +5,14 @@ import { readKeys, saveKey, forgetKey, type SavedKey } from "./keys";
 import { walletMessage } from "./wallet-language";
 import donguriIcon from "./assets/acorn-icon-96.png";
 import MaterialIcon from "./components/MaterialIcon.vue";
+import CoinOverlay from "./components/CoinOverlay.vue";
+import { requestMotionAccess } from "./coins/motion";
+const coinsVisible = ref(false);
+let motionPermission: Promise<boolean> = Promise.resolve(false);
+function showCoins() {
+  motionPermission = requestMotionAccess();
+  coinsVisible.value = true;
+}
 const route = useRoute(),
   router = useRouter();
 const page = computed(() => route.path.slice(1) || "home"),
@@ -98,6 +106,7 @@ async function history(more = false) {
 let loadVersion = 0;
 async function load() {
   const version = ++loadVersion;
+  coinsVisible.value = false;
   data.value = null;
   entries.value = [];
   error.value = "";
@@ -508,7 +517,12 @@ function forget(token: string) {
           <strong
             >{{ money(data.wallet.balance) }}
             <small>{{ data.bank.unit }}</small></strong
-          ><span>{{ data.bank.name }} · {{ data.bank.currencyName }}</span>
+          >
+          <div class="balance-footer">
+            <span>{{ data.bank.name }} · {{ data.bank.currencyName }}</span>
+            <button class="view-coins-button" @click="showCoins"><MaterialIcon name="savings" />{{ words("コインを見る", "コインをみる") }}</button>
+          </div>
+          <CoinOverlay v-if="coinsVisible" :balance="data.wallet.balance" :unit="data.bank.unit" :easy="easy" :motion-permission="motionPermission" @close="coinsVisible = false" />
         </section>
         <div class="columns">
           <section class="panel">

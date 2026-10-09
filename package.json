@@ -7,7 +7,7 @@
     "dev": "concurrently -k \"tsx watch server/local.ts\" \"vite --host 0.0.0.0\"",
     "build": "vue-tsc --noEmit && vite build",
     "typecheck": "vue-tsc --noEmit && tsc -p tsconfig.server.json --noEmit",
-    "test": "node --import tsx tests/service.test.ts",
+    "test": "node --import tsx tests/service.test.ts && node --import tsx tests/coins.test.ts",
     "synth": "cdk synth --strict",
     "deploy": "npm run build && cdk deploy OtetsudaiWallet",
     "test:e2e": "playwright test"
@@ -17,11 +17,13 @@
     "@aws-sdk/lib-dynamodb": "^3.900.0",
     "aws-cdk-lib": "^2.220.0",
     "constructs": "^10.4.0",
+    "matter-js": "^0.20.0",
     "vue": "^3.5.0",
     "vue-router": "^4.5.0"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",
+    "@types/matter-js": "^0.20.2",
     "@types/node": "^24.0.0",
     "@vitejs/plugin-vue": "^6.0.0",
     "aws-cdk": "2.1144.0",
