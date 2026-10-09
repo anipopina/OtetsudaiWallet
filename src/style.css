@@ -334,6 +334,8 @@ footer {
   color: #71826f;
   display: flex;
   justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 16px;
 }
 input[readonly] {
   font-size: 12px;
@@ -386,9 +388,6 @@ input[readonly] {
   }
   .page-title {
     gap: 14px;
-  }
-  footer span {
-    display: none;
   }
 }
 

@@ -607,11 +607,6 @@ function forget(token: string) {
   </main>
   <footer>
     おてつだいウォレット
-    <span>{{
-      words(
-        "家族の「ありがとう」をつなぐ。",
-        "かぞくの「ありがとう」をつなぐ。",
-      )
-    }}</span>
+    <span><a href="https://anipopina.com">anipopina.com</a></span>
   </footer>
 </template>
