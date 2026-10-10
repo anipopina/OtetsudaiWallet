@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { createSimulation, settings, type ExchangeMode } from '../coins/physics';
-import { drawCoins } from '../coins/draw';
+import { drawCoins, loadCoinImages, type CoinImages } from '../coins/draw';
 import { listenToMotion } from '../coins/motion';
 const props = defineProps<{ balance: number; unit: string; easy: boolean; motionPermission: Promise<boolean> }>();
 const emit = defineEmits<{ close: [] }>();
 const dialog = ref<HTMLDialogElement>();
 const canvas = ref<HTMLCanvasElement>();
 const omitted = ref(0);
+const imageError = ref(false);
 const motionActive = ref(false);
 const exchangeMode = ref<ExchangeMode>(1);
 const coinCount = ref(0);
@@ -22,6 +23,8 @@ onMounted(() => {
   document.body.style.overflow = 'hidden';
   modal.showModal();
   const ctx = element.getContext('2d')!;
+  let images: CoinImages = new Map();
+  void loadCoinImages().then(loaded => { if (!disposed) images = loaded; }).catch(() => { if (!disposed) imageError.value = true; });
   let width = element.clientWidth, height = element.clientHeight;
   let simulation = createSimulation(props.balance, width, height, exchangeMode.value);
   coinCount.value = simulation.coins.length;
@@ -40,11 +43,17 @@ onMounted(() => {
     simulation.resize(width, height);
   };
   const observer = new ResizeObserver(resize); observer.observe(element); resize();
-  let pointer: number | null = null;
+  const pointers = new Set<number>();
+  const releasePointers = () => {
+    for (const pointer of pointers) {
+      if (element.hasPointerCapture(pointer)) element.releasePointerCapture(pointer);
+    }
+    pointers.clear();
+    simulation.release();
+  };
   exchange = () => {
     exchangeMode.value = exchangeMode.value === 4 ? 1 : exchangeMode.value === 1 ? 2 : 4;
-    if (pointer !== null && element.hasPointerCapture(pointer)) element.releasePointerCapture(pointer);
-    pointer = null;
+    releasePointers();
     simulation.destroy();
     simulation = createSimulation(props.balance, width, height, exchangeMode.value);
     simulation.setGravity(gravity.x, gravity.y);
@@ -53,11 +62,11 @@ onMounted(() => {
   };
   const point = (event: PointerEvent) => { const rect = element.getBoundingClientRect(); return { x: event.clientX - rect.left, y: event.clientY - rect.top }; };
   const down = (event: PointerEvent) => {
-    if (pointer !== null || (event.pointerType === 'mouse' && event.button !== 0)) return;
-    if (simulation.grab(point(event))) { pointer = event.pointerId; element.setPointerCapture(pointer); }
+    if (event.pointerType === 'mouse' && event.button !== 0) return;
+    if (simulation.grab(point(event), event.pointerId)) { pointers.add(event.pointerId); element.setPointerCapture(event.pointerId); }
   };
-  const move = (event: PointerEvent) => { if (pointer === event.pointerId) simulation.move(point(event)); };
-  const up = (event: PointerEvent) => { if (pointer === event.pointerId) { simulation.release(); pointer = null; } };
+  const move = (event: PointerEvent) => { if (pointers.has(event.pointerId)) simulation.move(point(event), event.pointerId); };
+  const up = (event: PointerEvent) => { if (pointers.delete(event.pointerId)) { simulation.release(event.pointerId); if (element.hasPointerCapture(event.pointerId)) element.releasePointerCapture(event.pointerId); } };
   element.addEventListener('pointerdown', down); element.addEventListener('pointermove', move);
   element.addEventListener('pointerup', up); element.addEventListener('pointercancel', up); element.addEventListener('lostpointercapture', up);
   let frame = 0, last = 0, accumulator = 0;
@@ -65,15 +74,15 @@ onMounted(() => {
     if (!document.hidden) {
       accumulator += last ? Math.min(time - last, 50) : 0;
       while (accumulator >= 1000 / 60) { simulation.step(); accumulator -= 1000 / 60; }
-      drawCoins(ctx, simulation.coins, width, height);
+      drawCoins(ctx, simulation.coins, width, height, images);
     }
     last = time; frame = requestAnimationFrame(tick);
   };
-  const visibility = () => { simulation.release(); pointer = null; last = 0; accumulator = 0; };
+  const visibility = () => { releasePointers(); last = 0; accumulator = 0; };
   document.addEventListener('visibilitychange', visibility);
   frame = requestAnimationFrame(tick);
   cleanup = () => {
-    disposed = true; stopMotion();
+    disposed = true; stopMotion(); releasePointers();
     cancelAnimationFrame(frame); observer.disconnect(); simulation.destroy();
     document.removeEventListener('visibilitychange', visibility);
     element.removeEventListener('pointerdown', down); element.removeEventListener('pointermove', move);
@@ -96,7 +105,8 @@ onUnmounted(() => cleanup());
           <p class="coin-instructions">コインをつかんで、うごかしてみよう！<template v-if="motionActive"><br />かたむけると、コインがうごくよ！</template></p>
         </div>
         <canvas ref="canvas" aria-label="つかんでうごかせるコイン" />
-        <p v-if="balance === 0" class="coin-empty">まだコインがないよ。<br />おてつだいをして、ためてみよう！</p>
+        <p v-if="imageError" class="coin-empty" role="alert">コインのがぞうをよみこめなかったよ。<br />とじて、もういちどひらいてね。</p>
+        <p v-else-if="balance === 0" class="coin-empty">まだコインがないよ。<br />おてつだいをして、ためてみよう！</p>
       </div>
       <div class="coin-exchange">
         <button class="secondary coin-dialog-button" :disabled="balance === 0" @click="exchange">{{ easy ? 'りょうがえ' : '両替' }}</button>
