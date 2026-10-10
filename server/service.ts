@@ -7,7 +7,7 @@ const token=()=>randomBytes(16).toString('base64url');
 export class ApiError extends Error{constructor(public status:number,message:string){super(message);}}
 function text(v:unknown,label:string,max=40){if(typeof v!=='string'||!v.trim()||v.trim().length>max)throw new ApiError(400,`${label}は1〜${max}文字で入力してください。`);return v.trim();}
 const byName=(a:Item,b:Item)=>a.name.localeCompare(b.name,'ja');
-function publicWallet(w:Item){return {id:w.id,name:w.name,balance:w.balance,kanjiEnabled:w.kanjiEnabled!==false};}
+function publicWallet(w:Item){return {id:w.id,name:w.name,balance:w.balance,kanjiEnabled:w.kanjiEnabled};}
 export class Service{
  constructor(private db:Store){}
  async run(method:string,path:string,key:string|undefined,body:any={},cursor?:string):Promise<Record<string,any>>{
@@ -20,11 +20,10 @@ export class Service{
   const pk=`BANK#${access.bankId}`,bank=await this.db.get(pk,'META');if(!bank)throw new ApiError(404,'銀行が見つかりません。');
   const role=access.role;
   if(path.startsWith('/api/bank')&&role!=='bank'||path.startsWith('/api/wallet')&&role!=='wallet')throw new ApiError(403,'この鍵では操作できません。');
-  if(method==='GET'&&path==='/api/bank')return {bank,wallets:(await this.db.list(pk,'WALLET#')).sort(byName).map(w=>({...publicWallet(w),hasSecretUrl:!!w.encryptedToken}))};
+  if(method==='GET'&&path==='/api/bank')return {bank,wallets:(await this.db.list(pk,'WALLET#')).sort(byName).map(publicWallet)};
   if(method==='GET'&&/^\/api\/bank\/wallets\/[^/]+\/key$/.test(path)){
    const id=path.split('/')[4],wallet=await this.db.get(pk,`WALLET#${id}`);
    if(!wallet)throw new ApiError(404,'ウォレットが見つかりません。');
-   if(!wallet.encryptedToken)throw new ApiError(409,'このウォレットは旧方式で作成されたため、秘密URLを再表示できません。作成時に保存したURLをご利用ください。');
    return {token:decryptWalletKey(wallet.encryptedToken,key,bank.id,id)};
   }
   if(method==='POST'&&path==='/api/bank/wallets'){

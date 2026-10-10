@@ -13,7 +13,7 @@ infra/       AWS CDK
 
 `/bank?k=<token>` と `/wallet?k=<token>`。16バイト（128bit）の暗号学的乱数をbase64url化した22文字のトークンを使用。SHA-256ハッシュからサーバーが権限・銀行・ウォレットを解決します。乱数が十分なエントロピーを持つため、パスワード用の低速ハッシュやソルトには依存しません。UUIDは識別子であり権限ではありません。
 
-ウォレットの鍵は再コピー用にAES-256-GCMで暗号化してウォレットレコードに保存します。暗号化鍵は銀行の管理トークンからHKDF-SHA256（salt:銀行ID、用途別info）で導出し、銀行・ウォレットIDをAADで結び付けます。銀行の管理鍵自体は保存しません。再取得APIは銀行権限と所属銀行を検証し、通常の一覧・ウォレットAPIに暗号文や他の鍵を含めません。旧方式で作成したウォレットの鍵は復元できません。
+ウォレットの鍵は再コピー用にAES-256-GCMで暗号化してウォレットレコードに保存します。暗号化鍵は銀行の管理トークンからHKDF-SHA256（salt:銀行ID、用途別info）で導出し、銀行・ウォレットIDをAADで結び付けます。銀行の管理鍵自体は保存しません。再取得APIは銀行権限と所属銀行を検証し、通常の一覧・ウォレットAPIに暗号文や他の鍵を含めません。
 
 APIはAuthorization: Bearerヘッダーを使用します。銀行・ウォレットの権限は各操作で検証し、クライアントが銀行ID・送金元IDを選ぶことはできません。ウォレット一覧には他のウォレットの鍵や残高を含めません。APIはno-store、サイトはno-referrer、外部スクリプトは使用しません。CloudFront/APIのリクエストアクセスログは有効にせず、秘密URLやヘッダーの記録を避けます。Lambdaにも入力ログを出しません。ログを将来追加する場合も鍵は除去してください。
 
@@ -57,7 +57,7 @@ POSTはJSON、認証が必要な操作にはBearer鍵を送ります。
 
 AWS資料: [DynamoDB transactions](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/transaction-apis.html)、[CloudFront S3 OAC](https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.aws_cloudfront_origins-readme.html)。
 
-「かんじ」の設定はウォレットレコードのkanjiEnabledに保存します。未設定はtrue（ON）。設定更新はattribute_exists条件付きで当該属性のみ更新し、残高や鍵を書き戻しません。クライアントは保存成功後に表示を切り替え、失敗した場合は元の表示を維持します。銀行画面にはスイッチを表示しません。
+「かんじ」の設定はウォレットレコードのkanjiEnabledに保存します。作成時にtrue（ON）を保存します。設定更新はattribute_exists条件付きで当該属性のみ更新し、残高や鍵を書き戻しません。クライアントは保存成功後に表示を切り替え、失敗した場合は元の表示を維持します。銀行画面にはスイッチを表示しません。
 
 ## 初回デプロイ環境
 

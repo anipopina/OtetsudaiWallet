@@ -5,7 +5,7 @@ import {Service,ApiError} from '../server/service';
 import {MemoryStore} from '../server/store';
 async function setup(){const db=new MemoryStore(),s=new Service(db);const bank=await s.run('POST','/api/banks',undefined,{name:'太郎銀行',currencyName:'太郎コイン',unit:'TARO'});const a=await s.run('POST','/api/bank/wallets',bank.token,{name:'太郎'}),b=await s.run('POST','/api/bank/wallets',bank.token,{name:'パパ'});return {s,db,bank,a,b};}
 const post=(s:Service,path:string,key:string,toId:string,amount:number,requestId=randomUUID())=>s.run('POST',path,key,{toId,amount,memo:'おふろ洗い',requestId});
-test('history balances include older pages, outgoing transfers and legacy entries', async()=>{
+test('history balances include all pages and outgoing transfers', async()=>{
  const {s,db,a}=await setup();
  const amounts=[30,-20,-10,...Array(51).fill(1)];
  let balance=0;
@@ -31,14 +31,12 @@ test('bank can recover wallet keys without storing plaintext or exposing keys to
  await assert.rejects(s.run('GET',`/api/bank/wallets/${a.id}/key`,other.token),{status:404});
  assert.ok(!JSON.stringify([...db.items]).includes(a.token));
  const info=await s.run('GET','/api/wallet',a.token);assert.ok(!JSON.stringify(info).includes('encryptedToken'));
- const stored=[...db.items.values()].find(x=>x.id===a.id)!;delete stored.encryptedToken;
- await assert.rejects(s.run('GET',`/api/bank/wallets/${a.id}/key`,bank.token),{status:409});
 });
 test('wallet listings use Japanese name order',async()=>{
  const {s,bank,a}=await setup();for(const name of ['わかば','あおい','なつ'])await s.run('POST','/api/bank/wallets',bank.token,{name});
  for(const [path,key] of [['/api/bank',bank.token],['/api/wallet',a.token]]){const names=(await s.run('GET',path,key)).wallets.map((w:any)=>w.name);assert.deepEqual(names,[...names].sort((a,b)=>a.localeCompare(b,'ja')));}
 });
-test('kanji preference persists per wallet, defaults on, and cannot be changed by another role',async()=>{
+test('kanji preference persists per wallet, starts on, and cannot be changed by another role',async()=>{
  const {s,db,bank,a,b}=await setup();
  assert.equal((await s.run('GET','/api/wallet',a.token)).wallet.kanjiEnabled,true);
  await s.run('POST','/api/wallet/settings',a.token,{kanjiEnabled:false,walletId:b.id});
@@ -49,11 +47,9 @@ test('kanji preference persists per wallet, defaults on, and cannot be changed b
  await post(s,'/api/bank/issue',bank.token,a.id,30);
  assert.equal((await s.run('GET','/api/wallet',a.token)).wallet.kanjiEnabled,false);
  assert.equal((await s.run('GET','/api/wallet',a.token)).wallet.balance,30);
- const stored=[...db.items.values()].find(x=>x.id===b.id)!;delete stored.kanjiEnabled;
- assert.equal((await s.run('GET','/api/wallet',b.token)).wallet.kanjiEnabled,true);
 });
 
-test('access tokens contain 128 bits and reject old lengths',async()=>{
+test('access tokens contain 128 bits and reject invalid formats',async()=>{
  const {s,bank,a,b}=await setup();for(const k of [bank.token,a.token,b.token]){assert.match(k,/^[A-Za-z0-9_-]{22}$/);assert.equal(Buffer.from(k,'base64url').length,16);}
  for(const k of ['x'.repeat(43),'x'.repeat(21),'x'.repeat(23),'!'.repeat(22)])await assert.rejects(s.run('GET','/api/bank',k),{status:401});
 });

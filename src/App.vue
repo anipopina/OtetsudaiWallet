@@ -39,7 +39,7 @@ const share = ref<{
   token: string;
   name: string;
 } | null>(null);
-const kanjiEnabled = computed(() => data.value?.wallet?.kanjiEnabled !== false);
+const kanjiEnabled = computed(() => data.value?.wallet?.kanjiEnabled === true);
 const easy = computed(
   () => page.value === "wallet" && (!data.value || !kanjiEnabled.value),
 );
@@ -427,14 +427,10 @@ function forget(token: string) {
                 <span>{{ w.name }}</span
                 ><button
                   class="text-button"
-                  :disabled="busy || !w.hasSecretUrl"
+                  :disabled="busy"
                   @click="copyWallet(w.id)"
                 >
-                  {{
-                    w.hasSecretUrl
-                      ? "秘密URLをコピー"
-                      : "旧方式のためURL再表示不可"
-                  }}
+                  秘密URLをコピー
                 </button>
               </div>
               <strong
