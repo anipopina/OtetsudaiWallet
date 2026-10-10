@@ -61,8 +61,8 @@ export function createSimulation(balance: number, width: number, height: number,
       collisionFilter: { category: category(layer), mask: category(layer) | 1 },
     });
     Body.setAngle(body, Math.random() * Math.PI * 2);
-    Body.setVelocity(body, { x: vary(2, 1), y: vary(2, 1) });
-    Body.setAngularVelocity(body, vary(.025, 1));
+    Body.setVelocity(body, { x: 0, y: 0 });
+    Body.setAngularVelocity(body, 0);
     coins.push({ body, type, radius, layer, nextCheck: Math.random() * settings.checkInterval, interval: vary(settings.checkInterval, settings.intervalVariation) });
     Composite.add(engine.world, body);
   }

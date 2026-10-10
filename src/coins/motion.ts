@@ -2,7 +2,8 @@
 export function screenGravity(x: number | null, y: number | null, angle: number) {
   if (x === null || y === null || !Number.isFinite(x) || !Number.isFinite(y)) return null;
   const radians = angle * Math.PI / 180;
-  const gx = -x / 9.81, gy = y / 9.81;
+  // Device X points right and Y points up; canvas Y points down.
+  const gx = x / 9.81, gy = -y / 9.81;
   const rotated = { x: gx * Math.cos(radians) - gy * Math.sin(radians), y: gx * Math.sin(radians) + gy * Math.cos(radians) };
   const scale = Math.max(1, Math.hypot(rotated.x, rotated.y));
   return { x: rotated.x / scale, y: rotated.y / scale };
